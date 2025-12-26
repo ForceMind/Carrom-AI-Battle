@@ -122,20 +122,20 @@ export class Renderer {
     drawAIThinking(ai) {
         const striker = this.game.striker;
         
-        // 1. 绘制目标锁定线
-        if (ai.targetPos) {
+        // 1. 绘制目标锁定线 (使用平滑显示的 displayTargetPos)
+        if (ai.displayTargetPos) {
             this.ctx.setLineDash([5, 5]);
             this.ctx.strokeStyle = 'rgba(255, 50, 50, 0.4)';
             this.ctx.lineWidth = 2;
             this.ctx.beginPath();
             this.ctx.moveTo(striker.position.x, striker.position.y);
-            this.ctx.lineTo(ai.targetPos.x, ai.targetPos.y);
+            this.ctx.lineTo(ai.displayTargetPos.x, ai.displayTargetPos.y);
             this.ctx.stroke();
             this.ctx.setLineDash([]);
 
             // 目标点光圈
             this.ctx.beginPath();
-            this.ctx.arc(ai.targetPos.x, ai.targetPos.y, 25, 0, Math.PI * 2);
+            this.ctx.arc(ai.displayTargetPos.x, ai.displayTargetPos.y, 25, 0, Math.PI * 2);
             this.ctx.strokeStyle = 'rgba(255, 50, 50, 0.6)';
             this.ctx.stroke();
         }

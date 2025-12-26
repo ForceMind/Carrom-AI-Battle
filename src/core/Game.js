@@ -22,8 +22,7 @@ export class Game {
             friction: 0.02,
             restitution: 0.6,
             aiThinking: {
-                targetPos: null,
-                strikerTargetX: null,
+                displayTargetPos: null,
                 power: 0,
                 isThinking: false
             }
