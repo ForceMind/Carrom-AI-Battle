@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carrom AI Battle - 资深专家版</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #1a1a1a;
+            color: #eee;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            margin: 0;
+            display: flex;
+            flex-direction: row;
+        }
+        #game-container {
+            position: relative;
+            flex-grow: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: radial-gradient(circle, #333 0%, #111 100%);
+        }
+        canvas {
+            box-shadow: 0 0 50px rgba(0,0,0,0.8);
+            cursor: crosshair;
+            border: 15px solid #3d1f05;
+            border-radius: 10px;
+        }
+        #ui-panel {
+            width: 350px;
+            background: #2d2d2d;
+            padding: 20px;
+            border-left: 2px solid #444;
+            height: 100vh;
+            overflow-y: auto;
+            box-shadow: -5px 0 15px rgba(0,0,0,0.3);
+        }
+        .wood-texture {
+            background-color: #f3e5ab; /* 浅木色棋盘 */
+            background-image: url('https://www.transparenttextures.com/patterns/wood-pattern-with-fine-lines.png');
+        }
+        .control-group {
+            margin-bottom: 1.5rem;
+        }
+        label {
+            display: block;
+            font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+            color: #ccc;
+        }
+        input[type="range"] {
+            width: 100%;
+            accent-color: #f1c40f;
+        }
+        .stat-card {
+            background: rgba(0,0,0,0.2);
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div id="overlay" class="absolute top-4 left-4 pointer-events-none z-10">
+        <div class="bg-black/60 p-4 rounded-lg backdrop-blur-md border border-white/10">
+            <h2 class="text-xl font-bold text-yellow-500">Carrom AI Battle</h2>
+            <div class="mt-2 space-y-1">
+                <p class="flex justify-between gap-4"><span>玩家得分:</span> <span id="player-score" class="font-mono text-green-400">0</span></p>
+                <p class="flex justify-between gap-4"><span>AI 得分:</span> <span id="ai-score" class="font-mono text-red-400">0</span></p>
+                <p class="mt-2 pt-2 border-t border-white/10">当前回合: <span id="turn-display" class="font-bold text-blue-400">玩家</span></p>
+            </div>
+        </div>
+    </div>
+    <!-- Canvas will be injected here -->
+</div>
+
+<div id="ui-panel">
+    <h3 class="text-lg font-bold mb-4 border-b border-gray-600 pb-2 text-yellow-500">控制面板</h3>
+    
+    <div class="control-group">
+        <label>棋盘摩擦力 (Friction)</label>
+        <input type="range" id="friction-slider" min="0.005" max="0.05" step="0.001" value="0.02">
+        <div class="flex justify-between text-xs text-gray-400 mt-1"><span>滑</span><span id="friction-val">0.020</span><span>涩</span></div>
+    </div>
+
+    <div class="control-group">
+        <label>碰撞弹性 (Restitution)</label>
+        <input type="range" id="restitution-slider" min="0.3" max="0.9" step="0.05" value="0.6">
+        <div class="flex justify-between text-xs text-gray-400 mt-1"><span>软</span><span id="restitution-val">0.60</span><span>硬</span></div>
+    </div>
+
+    <div class="control-group">
+        <label>AI 难度</label>
+        <select id="difficulty-select" class="w-full bg-gray-700 border border-gray-600 rounded p-2 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500">
+            <option value="easy">简单 (新手 - 经常打偏)</option>
+            <option value="medium" selected>中等 (业余 - 偶尔失误)</option>
+            <option value="master">大师 (职业 - 极高精度)</option>
+        </select>
+    </div>
+
+    <div class="control-group">
+        <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" id="prediction-toggle" checked class="w-4 h-4 accent-yellow-500">
+            <span class="text-sm">显示预测线 & 力矢量</span>
+        </label>
+    </div>
+
+    <div class="mt-8 space-y-3">
+        <button id="reset-btn" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition shadow-lg">
+            重置棋局
+        </button>
+    </div>
+
+    <div class="mt-10 p-4 bg-yellow-900/20 border border-yellow-600/30 rounded-lg">
+        <h4 class="text-sm font-bold text-yellow-600 mb-2">操作指南</h4>
+        <ul class="text-xs text-gray-400 space-y-2">
+            <li>• <b class="text-gray-200">定位：</b>在底线上左右拖动 Striker。</li>
+            <li>• <b class="text-gray-200">瞄准：</b>点击 Striker 并向后拉动。</li>
+            <li>• <b class="text-gray-200">击球：</b>松开鼠标左键。</li>
+            <li>• <b class="text-gray-200">规则：</b>白球 20分，黑球 10分，红球 50分。</li>
+        </ul>
+    </div>
+</div>
+
+<script>
+/**
+ * Carrom AI Battle - 核心逻辑
+ */
+
+const { Engine, Render, Runner, World, Bodies, Body, Events, Vector, Composite, Query } = Matter;
+
+class CarromGame {
+    constructor() {
+        this.config = {
+            boardSize: 800,
+            pocketRadius: 38,
+            coinRadius: 16,
+            strikerRadius: 24,
+            baselineY: 660,
+            aiBaselineY: 140,
+            colors: {
+                board: '#f3e5ab',
+                white: '#fdfdfd',
+                black: '#222',
+                queen: '#e74c3c',
+                striker: '#f1c40f',
+                pocket: '#111'
+            }
+        };
+
+        this.state = {
+            scorePlayer: 0,
+            scoreAI: 0,
+            turn: 'PLAYER', // 'PLAYER' or 'AI'
+            phase: 'IDLE', // 'IDLE', 'PLACING', 'AIMING', 'MOVING', 'AI_THINKING'
+            predictionEnabled: true,
+            difficulty: 'medium',
+            friction: 0.02,
+            restitution: 0.6
+        };
+
+        this.mouse = {
+            isDown: false,
+            startPos: { x: 0, y: 0 },
+            currentPos: { x: 0, y: 0 }
+        };
+
+        this.initEngine();
+        this.initBoard();
+        this.resetGame();
+        this.initInteractions();
+        this.setupUI();
+        this.run();
+    }
+
+    initEngine() {
+        this.engine = Engine.create();
+        this.engine.gravity.y = 0;
+
+        this.render = Render.create({
+            element: document.getElementById('game-container'),
+            engine: this.engine,
+            options: {
+                width: this.config.boardSize,
+                height: this.config.boardSize,
+                wireframes: false,
+                background: this.config.colors.board
+            }
+        });
+
+        // 自定义渲染：绘制装饰线和预测线
+        Events.on(this.render, 'afterRender', () => {
+            this.drawBoardDecorations();
+            this.drawUIOverlay();
+        });
+
+        this.runner = Runner.create();
+    }
+
+    initBoard() {
+        const wallOptions = { 
+            isStatic: true, 
+            render: { fillStyle: '#3d1f05' }, 
+            restitution: this.state.restitution,
+            friction: 0.05
+        };
+        const sz = this.config.boardSize;
+        const t = 60; // 墙厚度
+
+        const walls = [
+            Bodies.rectangle(sz/2, -t/2 + 10, sz + t*2, t, wallOptions), // Top
+            Bodies.rectangle(sz/2, sz + t/2 - 10, sz + t*2, t, wallOptions), // Bottom
+            Bodies.rectangle(-t/2 + 10, sz/2, t, sz + t*2, wallOptions), // Left
+            Bodies.rectangle(sz + t/2 - 10, sz/2, t, sz + t*2, wallOptions) // Right
+        ];
+
+        this.pockets = [
+            { x: 40, y: 40 }, { x: sz - 40, y: 40 },
+            { x: 40, y: sz - 40 }, { x: sz - 40, y: sz - 40 }
+        ].map(pos => Bodies.circle(pos.x, pos.y, this.config.pocketRadius, {
+            isStatic: true,
+            isSensor: true,
+            label: 'pocket',
+            render: { fillStyle: this.config.colors.pocket }
+        }));
+
+        World.add(this.engine.world, [...walls, ...this.pockets]);
+    }
+
+    resetGame() {
+        // 清除现有棋子
+        const allBodies = Composite.allBodies(this.engine.world);
+        const toRemove = allBodies.filter(b => b.label.startsWith('coin') || b.label === 'striker');
+        World.remove(this.engine.world, toRemove);
+
+        this.coins = [];
+        const cx = this.config.boardSize / 2;
+        const cy = this.config.boardSize / 2;
+        const r = this.config.coinRadius;
+
+        // 摆放 Queen
+        this.addCoin(cx, cy, 'queen');
+
+        // 第一圈 (6个)
+        for (let i = 0; i < 6; i++) {
+            const angle = (i * 60) * (Math.PI / 180);
+            const x = cx + Math.cos(angle) * (r * 2.1);
+            const y = cy + Math.sin(angle) * (r * 2.1);
+            this.addCoin(x, y, i % 2 === 0 ? 'white' : 'black');
+        }
+
+        // 第二圈 (12个)
+        for (let i = 0; i < 12; i++) {
+            const angle = (i * 30) * (Math.PI / 180);
+            const x = cx + Math.cos(angle) * (r * 4.2);
+            const y = cy + Math.sin(angle) * (r * 4.2);
+            this.addCoin(x, y, (i + 1) % 2 === 0 ? 'white' : 'black');
+        }
+
+        this.state.turn = 'PLAYER';
+        this.spawnStriker();
+        this.state.phase = 'IDLE';
+        this.updatePhysics();
+        this.updateUI();
+    }
+
+    addCoin(x, y, type) {
+        const coin = Bodies.circle(x, y, this.config.coinRadius, {
+            restitution: this.state.restitution,
+            friction: this.state.friction,
+            frictionAir: this.state.friction,
+            label: 'coin-' + type,
+            render: { 
+                fillStyle: this.config.colors[type],
+                strokeStyle: '#000',
+                lineWidth: 1
+            }
+        });
+        this.coins.push(coin);
+        World.add(this.engine.world, coin);
+    }
+
+    spawnStriker() {
+        const y = this.state.turn === 'PLAYER' ? this.config.baselineY : this.config.aiBaselineY;
+        this.striker = Bodies.circle(this.config.boardSize / 2, y, this.config.strikerRadius, {
+            restitution: this.state.restitution,
+            friction: this.state.friction,
+            frictionAir: this.state.friction,
+            mass: 4,
+            label: 'striker',
+            render: { 
+                fillStyle: this.config.colors.striker,
+                strokeStyle: '#d35400',
+                lineWidth: 3
+            }
+        });
+        World.add(this.engine.world, this.striker);
+    }
+
+    initInteractions() {
+        const canvas = this.render.canvas;
+
+        canvas.addEventListener('mousedown', (e) => {
+            if (this.state.turn !== 'PLAYER' || this.state.phase === 'MOVING') return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            // 检查是否点中 Striker
+            const distance = Vector.magnitude(Vector.sub({ x: mouseX, y: mouseY }, this.striker.position));
+            
+            if (distance < this.config.strikerRadius * 2) {
+                this.state.phase = 'AIMING';
+                this.mouse.isDown = true;
+                this.mouse.startPos = { x: mouseX, y: mouseY };
+                this.mouse.currentPos = { x: mouseX, y: mouseY };
+            } else if (Math.abs(mouseY - this.config.baselineY) < 40) {
+                // 在底线附近点击，进入放置模式
+                this.state.phase = 'PLACING';
+                this.moveStrikerTo(mouseX);
+            }
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            this.mouse.currentPos = { x: mouseX, y: mouseY };
+
+            if (this.state.phase === 'PLACING') {
+                this.moveStrikerTo(mouseX);
+            }
+        });
+
+        window.addEventListener('mouseup', () => {
+            if (this.state.phase === 'AIMING' && this.mouse.isDown) {
+                this.shootStriker();
+            }
+            if (this.state.phase === 'PLACING') {
+                this.state.phase = 'IDLE';
+            }
+            this.mouse.isDown = false;
+        });
+    }
+
+    moveStrikerTo(x) {
+        // 限制在底线范围内 (避开球袋)
+        const limit = 120;
+        const clampedX = Math.max(limit, Math.min(this.config.boardSize - limit, x));
+        Body.setPosition(this.striker, { x: clampedX, y: this.config.baselineY });
+        Body.setVelocity(this.striker, { x: 0, y: 0 });
+    }
+
+    shootStriker() {
+        const forceVec = Vector.sub(this.mouse.startPos, this.mouse.currentPos);
+        const strength = Math.min(Vector.magnitude(forceVec) * 0.005, 0.15);
+        const angle = Math.atan2(forceVec.y, forceVec.x);
+        
+        Body.applyForce(this.striker, this.striker.position, {
+            x: Math.cos(angle) * strength,
+            y: Math.sin(angle) * strength
+        });
+
+        this.state.phase = 'MOVING';
+    }
+
+    drawBoardDecorations() {
+        const ctx = this.render.context;
+        const sz = this.config.boardSize;
+        const cp = sz / 2;
+
+        // 1. 绘制木质纹理背景 (如果图片加载失败的备选方案)
+        ctx.save();
+        ctx.globalCompositeOperation = 'destination-over';
+        ctx.fillStyle = '#f3e5ab';
+        ctx.fillRect(0, 0, sz, sz);
+        ctx.restore();
+
+        // 2. 绘制中心图案
+        ctx.strokeStyle = 'rgba(61, 31, 5, 0.3)';
+        ctx.lineWidth = 2;
+        
+        // 中心大圆
+        ctx.beginPath();
+        ctx.arc(cp, cp, this.config.coinRadius * 4.5, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // 中心小圆
+        ctx.beginPath();
+        ctx.arc(cp, cp, this.config.coinRadius * 1.2, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(231, 76, 60, 0.2)';
+        ctx.fill();
+        ctx.stroke();
+
+        // 3. 绘制对角线
+        ctx.beginPath();
+        const lineLen = 150;
+        const offset = 60;
+        // 四个角的对角线
+        [[offset, offset], [sz-offset, offset], [offset, sz-offset], [sz-offset, sz-offset]].forEach(pos => {
+            const dx = pos[0] < cp ? 1 : -1;
+            const dy = pos[1] < cp ? 1 : -1;
+            ctx.moveTo(pos[0], pos[1]);
+            ctx.lineTo(pos[0] + dx * lineLen, pos[1] + dy * lineLen);
+        });
+        ctx.stroke();
+
+        // 4. 绘制底线 (Baselines)
+        ctx.strokeStyle = '#3d1f05';
+        ctx.lineWidth = 3;
+        const blWidth = sz - 240;
+        const blX = 120;
+
+        // 玩家底线
+        this.drawBaseline(ctx, blX, this.config.baselineY, blWidth);
+        // AI 底线
+        this.drawBaseline(ctx, blX, this.config.aiBaselineY, blWidth);
+        // 侧边底线 (装饰)
+        ctx.save();
+        ctx.translate(cp, cp);
+        ctx.rotate(Math.PI / 2);
+        this.drawBaseline(ctx, -blWidth/2, cp - this.config.baselineY + cp, blWidth);
+        ctx.rotate(Math.PI);
+        this.drawBaseline(ctx, -blWidth/2, cp - this.config.baselineY + cp, blWidth);
+        ctx.restore();
+    }
+
+    drawBaseline(ctx, x, y, w) {
+        const h = 40;
+        ctx.strokeRect(x, y - h/2, w, h);
+        // 两端的圆圈
+        ctx.beginPath();
+        ctx.arc(x, y, h/2, 0, Math.PI * 2);
+        ctx.arc(x + w, y, h/2, 0, Math.PI * 2);
+        ctx.fillStyle = '#e74c3c';
+        ctx.fill();
+        ctx.stroke();
+    }
+
+    drawUIOverlay() {
+        if (this.state.phase === 'AIMING' && this.state.predictionEnabled) {
+            const ctx = this.render.context;
+            const start = this.striker.position;
+            const diff = Vector.sub(this.mouse.startPos, this.mouse.currentPos);
+            const strength = Math.min(Vector.magnitude(diff) * 0.005, 0.15);
+            
+            if (strength < 0.01) return;
+
+            const dir = Vector.normalise(diff);
+            
+            // 1. 绘制拉力线 (Power Bar)
+            ctx.beginPath();
+            ctx.strokeStyle = '#f1c40f';
+            ctx.lineWidth = 4;
+            ctx.moveTo(start.x, start.y);
+            ctx.lineTo(start.x - dir.x * strength * 1000, start.y - dir.y * strength * 1000);
+            ctx.stroke();
+
+            // 2. 绘制预测线 (带一次反弹)
+            ctx.setLineDash([5, 5]);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.lineWidth = 2;
+            
+            let currentPos = { x: start.x, y: start.y };
+            let currentDir = { x: dir.x, y: dir.y };
+            let remainingDist = 800;
+
+            ctx.beginPath();
+            ctx.moveTo(currentPos.x, currentPos.y);
+
+            // 模拟一次碰撞
+            const sz = this.config.boardSize;
+            const margin = 30; // 墙壁边缘
+
+            // 计算到墙壁的距离
+            let tx = currentDir.x > 0 ? (sz - margin - currentPos.x) / currentDir.x : (margin - currentPos.x) / currentDir.x;
+            let ty = currentDir.y > 0 ? (sz - margin - currentPos.y) / currentDir.y : (margin - currentPos.y) / currentDir.y;
+            
+            let t = Math.min(tx, ty);
+            if (t > 0 && t < remainingDist) {
+                let hitX = currentPos.x + currentDir.x * t;
+                let hitY = currentPos.y + currentDir.y * t;
+                ctx.lineTo(hitX, hitY);
+                
+                // 反弹
+                if (tx < ty) currentDir.x *= -1;
+                else currentDir.y *= -1;
+                
+                ctx.lineTo(hitX + currentDir.x * (remainingDist - t), hitY + currentDir.y * (remainingDist - t));
+            } else {
+                ctx.lineTo(currentPos.x + currentDir.x * remainingDist, currentPos.y + currentDir.y * remainingDist);
+            }
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+    }
+
+    checkPockets() {
+        const allBodies = Composite.allBodies(this.engine.world);
+        const coins = allBodies.filter(b => b.label.startsWith('coin'));
+        const striker = this.striker;
+
+        coins.forEach(coin => {
+            this.pockets.forEach(pocket => {
+                const dist = Vector.magnitude(Vector.sub(coin.position, pocket.position));
+                if (dist < this.config.pocketRadius) {
+                    this.handleScoring(coin);
+                    World.remove(this.engine.world, coin);
+                }
+            });
+        });
+
+        // Striker 落袋惩罚
+        this.pockets.forEach(pocket => {
+            const dist = Vector.magnitude(Vector.sub(striker.position, pocket.position));
+            if (dist < this.config.pocketRadius) {
+                this.handleStrikerFoul();
+            }
+        });
+    }
+
+    handleScoring(coin) {
+        let points = 10;
+        if (coin.label.includes('white')) points = 20;
+        if (coin.label.includes('queen')) points = 50;
+
+        if (this.state.turn === 'PLAYER') {
+            this.state.scorePlayer += points;
+        } else {
+            this.state.scoreAI += points;
+        }
+        this.updateUI();
+    }
+
+    handleStrikerFoul() {
+        if (this.state.turn === 'PLAYER') {
+            this.state.scorePlayer = Math.max(0, this.state.scorePlayer - 10);
+        } else {
+            this.state.scoreAI = Math.max(0, this.state.scoreAI - 10);
+        }
+        // 立即重置 Striker 位置
+        Body.setPosition(this.striker, { x: this.config.boardSize/2, y: this.state.turn === 'PLAYER' ? this.config.baselineY : this.config.aiBaselineY });
+        Body.setVelocity(this.striker, { x: 0, y: 0 });
+        this.updateUI();
+    }
+
+    checkMovementStopped() {
+        if (this.state.phase !== 'MOVING') return;
+
+        const allBodies = Composite.allBodies(this.engine.world);
+        const moving = allBodies.some(b => !b.isStatic && (Vector.magnitude(b.velocity) > 0.15 || Vector.magnitude(b.angularVelocity) > 0.01));
+
+        if (!moving) {
+            // 停止所有微小运动
+            allBodies.forEach(b => {
+                if (!b.isStatic) {
+                    Body.setVelocity(b, { x: 0, y: 0 });
+                    Body.setAngularVelocity(b, 0);
+                }
+            });
+
+            this.state.phase = 'IDLE';
+            
+            // 检查是否还有棋子
+            const remainingCoins = allBodies.filter(b => b.label.startsWith('coin'));
+            if (remainingCoins.length === 0) {
+                alert(`游戏结束！\n玩家得分: ${this.state.scorePlayer}\nAI 得分: ${this.state.scoreAI}`);
+                this.resetGame();
+            } else {
+                this.switchTurn();
+            }
+        }
+    }
+
+    switchTurn() {
+        this.state.turn = this.state.turn === 'PLAYER' ? 'AI' : 'PLAYER';
+        this.updateUI();
+
+        // 移除旧 Striker，生成新位置的 Striker
+        World.remove(this.engine.world, this.striker);
+        this.spawnStriker();
+
+        if (this.state.turn === 'AI') {
+            this.runAILogic();
+        }
+    }
+
+    async runAILogic() {
+        this.state.phase = 'AI_THINKING';
+        await new Promise(r => setTimeout(r, 1000)); // 思考时间
+
+        const targets = Composite.allBodies(this.engine.world).filter(b => b.label.startsWith('coin'));
+        if (targets.length === 0) return;
+
+        let bestShot = null;
+        let maxScore = -Infinity;
+
+        // 遍历所有球和所有袋子，寻找最佳路径
+        for (const target of targets) {
+            for (const pocket of this.pockets) {
+                // 计算球到袋子的向量
+                const coinToPocket = Vector.sub(pocket.position, target.position);
+                const distCoinPocket = Vector.magnitude(coinToPocket);
+                
+                // 计算击打点 (球的背面)
+                const dir = Vector.normalise(coinToPocket);
+                const hitPoint = Vector.sub(target.position, Vector.mult(dir, this.config.coinRadius + this.config.strikerRadius - 5));
+
+                // 检查击打点是否在 AI 的合法区域 (大致在上方)
+                if (hitPoint.y > target.position.y) continue; 
+
+                // 计算 Striker 到击打点的路径
+                // 简化：AI 只能在底线上移动
+                const strikerX = hitPoint.x;
+                const limit = 120;
+                const clampedX = Math.max(limit, Math.min(this.config.boardSize - limit, strikerX));
+                
+                const strikerPos = { x: clampedX, y: this.config.aiBaselineY };
+                const strikerToHitPoint = Vector.sub(hitPoint, strikerPos);
+                const distStrikerHit = Vector.magnitude(strikerToHitPoint);
+
+                // 评分逻辑：距离越短分数越高，Queen 分数更高
+                let score = 1000 - distCoinPocket - distStrikerHit;
+                if (target.label.includes('queen')) score += 200;
+                if (target.label.includes('white')) score += 50;
+
+                if (score > maxScore) {
+                    maxScore = score;
+                    bestShot = { strikerX: clampedX, targetPos: hitPoint, strength: 0.08 + (distStrikerHit * 0.0001) };
+                }
+            }
+        }
+
+        if (!bestShot) {
+            // 兜底逻辑：随便打
+            bestShot = { strikerX: 400, targetPos: targets[0].position, strength: 0.1 };
+        }
+
+        // 1. 平滑移动 Striker
+        const startX = this.striker.position.x;
+        const steps = 40;
+        for (let i = 0; i <= steps; i++) {
+            const x = startX + (bestShot.strikerX - startX) * (i / steps);
+            Body.setPosition(this.striker, { x, y: this.config.aiBaselineY });
+            await new Promise(r => setTimeout(r, 15));
+        }
+
+        await new Promise(r => setTimeout(r, 500)); // 瞄准停顿
+
+        // 2. 增加难度偏差
+        let deviation = 0;
+        if (this.state.difficulty === 'easy') deviation = (Math.random() - 0.5) * 0.15;
+        if (this.state.difficulty === 'medium') deviation = (Math.random() - 0.5) * 0.04;
+        
+        const finalVec = Vector.sub(bestShot.targetPos, this.striker.position);
+        const angle = Math.atan2(finalVec.y, finalVec.x) + deviation;
+        const force = bestShot.strength * (0.8 + Math.random() * 0.4);
+
+        // 3. 击球
+        Body.applyForce(this.striker, this.striker.position, {
+            x: Math.cos(angle) * force,
+            y: Math.sin(angle) * force
+        });
+        
+        this.state.phase = 'MOVING';
+    }
+
+    setupUI() {
+        const fSlider = document.getElementById('friction-slider');
+        const rSlider = document.getElementById('restitution-slider');
+        const dSelect = document.getElementById('difficulty-select');
+        const pToggle = document.getElementById('prediction-toggle');
+        const resetBtn = document.getElementById('reset-btn');
+
+        fSlider.oninput = (e) => {
+            const val = parseFloat(e.target.value);
+            this.state.friction = val;
+            document.getElementById('friction-val').innerText = val.toFixed(3);
+            this.updatePhysics();
+        };
+
+        rSlider.oninput = (e) => {
+            const val = parseFloat(e.target.value);
+            this.state.restitution = val;
+            document.getElementById('restitution-val').innerText = val.toFixed(2);
+            this.updatePhysics();
+        };
+
+        dSelect.onchange = (e) => this.state.difficulty = e.target.value;
+        pToggle.onchange = (e) => this.state.predictionEnabled = e.target.checked;
+        resetBtn.onclick = () => this.resetGame();
+    }
+
+    updatePhysics() {
+        const allBodies = Composite.allBodies(this.engine.world);
+        allBodies.forEach(b => {
+            if (!b.isStatic) {
+                b.friction = this.state.friction;
+                b.frictionAir = this.state.friction;
+                b.restitution = this.state.restitution;
+            }
+        });
+    }
+
+    updateUI() {
+        document.getElementById('player-score').innerText = this.state.scorePlayer;
+        document.getElementById('ai-score').innerText = this.state.scoreAI;
+        document.getElementById('turn-display').innerText = this.state.turn === 'PLAYER' ? '玩家' : 'AI';
+        document.getElementById('turn-display').className = this.state.turn === 'PLAYER' ? 'font-bold text-blue-400' : 'font-bold text-red-400';
+    }
+
+    run() {
+        Render.run(this.render);
+        Runner.run(this.runner, this.engine);
+        
+        Events.on(this.engine, 'afterUpdate', () => {
+            this.checkPockets();
+            this.checkMovementStopped();
+        });
+    }
+}
+
+window.onload = () => {
+    new CarromGame();
+};
+</script>
+</body>
+</html>
