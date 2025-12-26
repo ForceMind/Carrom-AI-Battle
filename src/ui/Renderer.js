@@ -1,4 +1,4 @@
-import { CONFIG } from '../core/Constants';
+import { CONFIG } from '../core/Constants.js';
 
 export class Renderer {
     constructor(physics) {

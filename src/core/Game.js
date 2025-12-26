@@ -1,9 +1,9 @@
-import { Bodies, Body, Events, Composite, Vector } from 'matter-js';
-import { PhysicsEngine } from './PhysicsEngine';
-import { CONFIG } from './Constants';
-import { CarromAI } from '../ai/CarromAI';
-import { Renderer } from '../ui/Renderer';
-import { Logger } from '../utils/Logger';
+const { Bodies, Body, Events, Composite, Vector } = Matter;
+import { PhysicsEngine } from './PhysicsEngine.js';
+import { CONFIG } from './Constants.js';
+import { CarromAI } from '../ai/CarromAI.js';
+import { Renderer } from '../ui/Renderer.js';
+import { Logger } from '../utils/Logger.js';
 
 export class Game {
     constructor() {
@@ -17,7 +17,9 @@ export class Game {
             turn: 'PLAYER',
             phase: 'IDLE',
             aimStart: { x: 0, y: 0 },
-            strikerPos: { x: 0, y: 0 }
+            strikerPos: { x: 0, y: 0 },
+            friction: 0.02,
+            restitution: 0.6
         };
 
         this.mouse = { x: 0, y: 0, isDown: false };
@@ -25,6 +27,23 @@ export class Game {
         this.initEvents();
         this.reset();
         this.physics.start();
+    }
+
+    updatePhysicsConfig(key, value) {
+        this.state[key] = value;
+        const bodies = Composite.allBodies(this.physics.engine.world);
+        bodies.forEach(b => {
+            if (!b.isStatic) {
+                if (key === 'friction') {
+                    b.friction = value;
+                    b.frictionAir = value;
+                }
+                if (key === 'restitution') {
+                    b.restitution = value;
+                }
+            }
+        });
+        Logger.log(`物理参数更新: ${key} = ${value}`, "info");
     }
 
     reset() {
@@ -59,9 +78,9 @@ export class Game {
 
     addCoin(x, y, type) {
         const coin = Bodies.circle(x, y, CONFIG.COIN_RADIUS, {
-            restitution: 0.6,
-            friction: 0.02,
-            frictionAir: 0.02,
+            restitution: this.state.restitution,
+            friction: this.state.friction,
+            frictionAir: this.state.friction,
             label: 'coin-' + type,
             render: { fillStyle: CONFIG.COLORS[type.toUpperCase()], strokeStyle: '#000', lineWidth: 1 }
         });
@@ -71,9 +90,9 @@ export class Game {
     spawnStriker() {
         const y = this.state.turn === 'PLAYER' ? CONFIG.BASELINE_Y : CONFIG.AI_BASELINE_Y;
         this.striker = Bodies.circle(CONFIG.BOARD_SIZE / 2, y, CONFIG.STRIKER_RADIUS, {
-            restitution: 0.6,
-            friction: 0.02,
-            frictionAir: 0.02,
+            restitution: this.state.restitution,
+            friction: this.state.friction,
+            frictionAir: this.state.friction,
             mass: 4,
             label: 'striker',
             render: { fillStyle: CONFIG.COLORS.STRIKER, strokeStyle: '#d35400', lineWidth: 3 }

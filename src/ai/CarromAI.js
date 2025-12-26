@@ -1,6 +1,6 @@
-import { Body, Vector, Composite } from 'matter-js';
-import { CONFIG } from '../core/Constants';
-import { Logger } from '../utils/Logger';
+const { Body, Vector, Composite } = Matter;
+import { CONFIG } from '../core/Constants.js';
+import { Logger } from '../utils/Logger.js';
 
 export class CarromAI {
     constructor(game) {

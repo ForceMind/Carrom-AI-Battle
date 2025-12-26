@@ -1,5 +1,5 @@
-import { Engine, Render, Runner, World, Bodies, Events, Composite, Vector } from 'matter-js';
-import { CONFIG } from './Constants';
+const { Engine, Render, Runner, World, Bodies, Events, Composite, Vector } = Matter;
+import { CONFIG } from './Constants.js';
 
 export class PhysicsEngine {
     constructor(containerId) {
