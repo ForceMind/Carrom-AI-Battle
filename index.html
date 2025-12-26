@@ -75,6 +75,17 @@
 <body>
     <div id="app">
         <div id="game-container">
+            <!-- Start Overlay -->
+            <div id="start-overlay" class="absolute inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm">
+                <div class="text-center p-8 glass-card rounded-2xl shadow-2xl border border-white/20">
+                    <h1 class="text-4xl font-black text-white mb-2 tracking-tighter">CARROM AI</h1>
+                    <p class="text-slate-400 mb-8 text-sm">资深专家版 · 动态胜率平衡</p>
+                    <button id="start-btn" class="px-12 py-4 bg-yellow-500 hover:bg-yellow-400 text-slate-900 font-black rounded-full text-xl transition-all active:scale-95 shadow-[0_0_30px_rgba(234,179,8,0.3)]">
+                        开始游戏
+                    </button>
+                </div>
+            </div>
+
             <div class="absolute top-6 left-6 pointer-events-none z-10 flex gap-4">
                 <div class="glass-card p-4 rounded-xl shadow-2xl">
                     <div class="text-xs text-slate-400 uppercase tracking-wider font-semibold">Player</div>
@@ -125,6 +136,15 @@
         import { Game } from "./src/core/Game.js";
         window.addEventListener("DOMContentLoaded", () => {
             const game = new Game();
+            
+            const startOverlay = document.getElementById("start-overlay");
+            const startBtn = document.getElementById("start-btn");
+            
+            startBtn.onclick = () => {
+                startOverlay.classList.add("hidden");
+                game.start();
+            };
+
             document.getElementById("reset-btn").onclick = () => game.reset();
             
             const fSlider = document.getElementById("friction-slider");

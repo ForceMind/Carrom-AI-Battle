@@ -8,7 +8,7 @@ import { Logger } from '../utils/Logger.js';
 export class Game {
     constructor() {
         this.physics = new PhysicsEngine('game-container');
-        this.renderer = new Renderer(this.physics);
+        this.renderer = new Renderer(this.physics, this);
         this.ai = new CarromAI(this);
         
         this.state = {
@@ -16,10 +16,17 @@ export class Game {
             scoreAI: 0,
             turn: 'PLAYER',
             phase: 'IDLE',
+            isStarted: false,
             aimStart: { x: 0, y: 0 },
             strikerPos: { x: 0, y: 0 },
             friction: 0.02,
-            restitution: 0.6
+            restitution: 0.6,
+            aiThinking: {
+                targetPos: null,
+                strikerTargetX: null,
+                power: 0,
+                isThinking: false
+            }
         };
 
         this.mouse = { x: 0, y: 0, isDown: false };
@@ -27,6 +34,11 @@ export class Game {
         this.initEvents();
         this.reset();
         this.physics.start();
+    }
+
+    start() {
+        this.state.isStarted = true;
+        Logger.log("游戏正式开始！", "success");
     }
 
     updatePhysicsConfig(key, value) {
@@ -103,55 +115,70 @@ export class Game {
     initEvents() {
         const canvas = this.physics.render.canvas;
 
-        const handleStart = (x, y) => {
-            if (this.state.turn !== 'PLAYER' || this.state.phase === 'MOVING') return;
+        const getCoords = (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            
+            // 考虑 canvas 的缩放 (max-width: 95vmin)
+            const scaleX = CONFIG.BOARD_SIZE / rect.width;
+            const scaleY = CONFIG.BOARD_SIZE / rect.height;
+            
+            return {
+                x: (clientX - rect.left) * scaleX,
+                y: (clientY - rect.top) * scaleY
+            };
+        };
+
+        const handleStart = (e) => {
+            if (!this.state.isStarted || this.state.turn !== 'PLAYER' || this.state.phase === 'MOVING') return;
+            const { x, y } = getCoords(e);
+            
             const dist = Vector.magnitude(Vector.sub({ x, y }, this.striker.position));
-            if (dist < CONFIG.STRIKER_RADIUS * 2) {
+            if (dist < CONFIG.STRIKER_RADIUS * 2.5) { // 增大点击判定范围，方便手机操作
                 this.state.phase = 'AIMING';
                 this.state.aimStart = { x, y };
                 this.state.strikerPos = { ...this.striker.position };
-            } else if (Math.abs(y - CONFIG.BASELINE_Y) < 50) {
+                this.mouse.isDown = true;
+            } else if (Math.abs(y - CONFIG.BASELINE_Y) < 60) {
                 this.state.phase = 'PLACING';
                 this.moveStriker(x);
             }
         };
 
-        const handleMove = (x, y) => {
+        const handleMove = (e) => {
+            if (!this.state.isStarted) return;
+            const { x, y } = getCoords(e);
             this.mouse.x = x;
             this.mouse.y = y;
             if (this.state.phase === 'PLACING') this.moveStriker(x);
         };
 
         const handleEnd = () => {
+            if (!this.state.isStarted) return;
             if (this.state.phase === 'AIMING') this.shoot();
             if (this.state.phase === 'PLACING') this.state.phase = 'IDLE';
+            this.mouse.isDown = false;
         };
 
         // Mouse Events
-        canvas.addEventListener('mousedown', e => {
-            const rect = canvas.getBoundingClientRect();
-            handleStart(e.clientX - rect.left, e.clientY - rect.top);
-        });
-        window.addEventListener('mousemove', e => {
-            const rect = canvas.getBoundingClientRect();
-            handleMove(e.clientX - rect.left, e.clientY - rect.top);
-        });
+        canvas.addEventListener('mousedown', handleStart);
+        window.addEventListener('mousemove', handleMove);
         window.addEventListener('mouseup', handleEnd);
 
         // Touch Events (Mobile Support)
-        canvas.addEventListener('touchstart', e => {
+        canvas.addEventListener('touchstart', (e) => {
             e.preventDefault();
-            const rect = canvas.getBoundingClientRect();
-            const touch = e.touches[0];
-            handleStart(touch.clientX - rect.left, touch.clientY - rect.top);
+            handleStart(e);
         }, { passive: false });
-        canvas.addEventListener('touchmove', e => {
+        canvas.addEventListener('touchmove', (e) => {
             e.preventDefault();
-            const rect = canvas.getBoundingClientRect();
-            const touch = e.touches[0];
-            handleMove(touch.clientX - rect.left, touch.clientY - rect.top);
+            handleMove(e);
         }, { passive: false });
-        canvas.addEventListener('touchend', handleEnd);
+        canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            handleEnd();
+        }, { passive: false });
 
         Events.on(this.physics.engine, 'afterUpdate', () => {
             this.checkPockets();
@@ -172,7 +199,8 @@ export class Game {
 
     shoot() {
         const diff = Vector.sub(this.state.aimStart, this.mouse);
-        const strength = Math.min(Vector.magnitude(diff) * 0.005, 0.15);
+        const dist = Vector.magnitude(diff);
+        const strength = Math.min(dist / 200 * 0.15, 0.15);
         if (strength < 0.01) {
             this.state.phase = 'IDLE';
             return;

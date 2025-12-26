@@ -15,6 +15,12 @@ export class CarromAI {
     async play() {
         Logger.log("AI 正在观察棋盘...", "ai");
         this.game.state.phase = 'AI_THINKING';
+        this.game.state.aiThinking = {
+            targetPos: null,
+            strikerTargetX: null,
+            power: 0,
+            isThinking: true
+        };
         
         // 动态难度调整 (DDA)
         const winRate = this.calculatePlayerWinRate();
@@ -22,7 +28,7 @@ export class CarromAI {
         
         Logger.log(`当前玩家胜率: ${(winRate * 100).toFixed(1)}% | 难度调整: ${difficultyAdjustment.label}`, "info");
 
-        await new Promise(r => setTimeout(r, 1000));
+        await new Promise(r => setTimeout(r, 800));
 
         const targets = Composite.allBodies(this.game.physics.engine.world).filter(b => b.label.startsWith('coin'));
         if (targets.length === 0) return;
@@ -35,19 +41,24 @@ export class CarromAI {
             return;
         }
 
+        // 展示思考过程：锁定目标
+        this.game.state.aiThinking.targetPos = bestShot.targetPos;
+        this.game.state.aiThinking.strikerTargetX = bestShot.strikerX;
         Logger.log(`AI 锁定目标: ${bestShot.targetLabel} | 预计成功率: ${(bestShot.confidence * 100).toFixed(1)}%`, "ai");
 
         // 1. 移动 Striker
         await this.smoothMove(bestShot.strikerX);
 
-        // 2. 瞄准停顿
-        await new Promise(r => setTimeout(r, 500));
+        // 2. 瞄准停顿并展示力度
+        this.game.state.aiThinking.power = bestShot.strength * 20; // 缩放用于显示
+        await new Promise(r => setTimeout(r, 1000));
 
         // 3. 击球
         const force = Vector.mult(bestShot.direction, bestShot.strength);
         Body.applyForce(this.game.striker, this.game.striker.position, force);
         
         this.game.state.phase = 'MOVING';
+        this.game.state.aiThinking.isThinking = false;
         Logger.log("AI 击球！", "success");
     }
 
@@ -105,6 +116,7 @@ export class CarromAI {
                         direction: { x: Math.cos(finalAngle), y: Math.sin(finalAngle) },
                         strength: (0.08 + (distStrikerHit * 0.0001)) * (1 + (Math.random() - 0.5) * adj.strengthVar),
                         targetLabel: target.label,
+                        targetPos: { ...target.position },
                         confidence: adj.confidence
                     };
                 }
